@@ -4,6 +4,8 @@ import Text.Printf
 import Data.List
 import System.Exit
 import Control.Concurrent
+import Control.Concurrent.STM
+import Control.Concurrent.STM.TChan
 import System.Random
 import Control.Monad
 
@@ -18,16 +20,17 @@ main = do
     write h "NICK" nick
     write h "USER" (nick++" 0 * :skirit's bot")
     write h "JOIN" chan
-    bot h 
-    listen h
+    kanal <- newTChanIO
+    bot kanal h 
+    listen kanal h
 
 write :: Handle -> String -> String -> IO ()
 write h s t = do
     hPrintf h "%s %s\r\n" s t
     printf    "> %s %s\n" s t
 
-listen :: Handle -> IO ()
-listen h = forever $ do
+listen :: TChan String -> Handle -> IO ()
+listen kanal h = forever $ do
     t <- hGetLine h
     let s = init t
     if ping s then pong s else eval h (clean s)
@@ -46,6 +49,8 @@ eval _   _                       = return () -- ignore everything else
 privmsg :: Handle -> String -> IO ()
 privmsg h s = write h "PRIVMSG" (chan ++ " :" ++ s)
 
-bot h = forkIO $ forever $ do
+bot kanal h = forkIO $ forever $ do
     threadDelay 10000000
+    -- checkg gpio, set rgb diods, read last topit, update topic 
+    -- TOPIC <channel> [<topic>]
 
