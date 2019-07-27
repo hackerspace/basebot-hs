@@ -20,9 +20,9 @@ main = do
     write h "NICK" nick
     write h "USER" (nick++" 0 * :skirit's bot")
     write h "JOIN" chan
-    kanal <- newTChanIO
-    bot kanal h 
-    listen kanal h
+    k <- newTChanIO
+    bot k h 
+    listen k h
 
 write :: Handle -> String -> String -> IO ()
 write h s t = do
@@ -30,26 +30,23 @@ write h s t = do
     printf    "> %s %s\n" s t
 
 listen :: TChan String -> Handle -> IO ()
-listen kanal h = forever $ do
+listen k h = forever $ do
     t <- hGetLine h
     let s = init t
-    if ping s then pong s else eval h (clean s)
+    eval h s
     putStrLn s
   where
     forever a = a >> forever a
-    clean     = drop 1 . dropWhile (/= ':') . drop 1
-    ping x    = "PING :" `isPrefixOf` x
-    pong x    = write h "PONG" (':' : drop 6 x)
 
 eval :: Handle -> String -> IO ()
-eval h    "!quit"                = write h "QUIT" ":Exiting" >> exitWith ExitSuccess
-eval h x | "!id " `isPrefixOf` x = privmsg h (drop 4 x)
-eval _   _                       = return () -- ignore everything else
+eval h x | "!quit" `isInfixOf`   x = write h "QUIT" ":Exiting" >> exitWith ExitSuccess
+eval h x | "PING :" `isPrefixOf` x = write h "PONG" (':' : drop 6 x)
+eval _ _                           = return () -- ignore everything else
 
 privmsg :: Handle -> String -> IO ()
 privmsg h s = write h "PRIVMSG" (chan ++ " :" ++ s)
 
-bot kanal h = forkIO $ forever $ do
+bot k h = forkIO $ forever $ do
     threadDelay 10000000
     -- checkg gpio, set rgb diods, read last topit, update topic 
     -- TOPIC <channel> [<topic>]
