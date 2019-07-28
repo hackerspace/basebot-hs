@@ -20,7 +20,7 @@ main = do
     write h "NICK" nick
     write h "USER" (nick++" 0 * :skirit's bot")
     write h "JOIN" chan
-    k <- newTChanIO
+    k <- newEmptyMVar
     bot k h 
     listen k h
 
@@ -29,25 +29,33 @@ write h s t = do
     hPrintf h "%s %s\r\n" s t
     printf    "> %s %s\n" s t
 
-listen :: TChan String -> Handle -> IO ()
 listen k h = forever $ do
     t <- hGetLine h
     let s = init t
-    eval h s
     putStrLn s
+    eval k h s
   where
     forever a = a >> forever a
 
-eval :: Handle -> String -> IO ()
-eval h x | "!quit" `isInfixOf`   x = write h "QUIT" ":Exiting" >> exitWith ExitSuccess
-eval h x | "PING :" `isPrefixOf` x = write h "PONG" (':' : drop 6 x)
-eval _ _                           = return () -- ignore everything else
+eval k h s | "!quit"  `isInfixOf`  s = write h "QUIT" ":Exiting" >> exitWith ExitSuccess
+eval k h s | "PING :" `isPrefixOf` s = write h "PONG" (':' : drop 6 s)
+eval k h s | "TOPIC " `isPrefixOf` (command s) || "332 " `isPrefixOf` (command s) = do
+     tryPutMVar k (content s)
+     swapMVar k (content s)     -- todle je fakt hnusny 
+     putStrLn ("kanal> " ++ (content s))
+   where
+     command = drop 1 . dropWhile (/= ' ')
+     content = drop 1 . dropWhile (/= ':') . drop 1
+eval _ _ _ = return () -- ignore everything else
 
-privmsg :: Handle -> String -> IO ()
 privmsg h s = write h "PRIVMSG" (chan ++ " :" ++ s)
 
 bot k h = forkIO $ forever $ do
     threadDelay 10000000
+    m <- tryReadMVar k
+    case m of
+       Nothing -> return ()
+       Just a -> privmsg h a
     -- checkg gpio, set rgb diods, read last topit, update topic 
     -- TOPIC <channel> [<topic>]
 
