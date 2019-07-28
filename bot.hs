@@ -14,7 +14,7 @@ port   = 6667
 chan   = "#boths-testing"
 nick   = "botik"
 
-main = do
+main = forever $ do
     h <- connectTo server (PortNumber (fromIntegral port))
     hSetBuffering h NoBuffering
     write h "NICK" nick
@@ -34,8 +34,6 @@ listen k h = forever $ do
     let s = init t
     putStrLn s
     eval k h s
-  where
-    forever a = a >> forever a
 
 eval k h s | "!quit"  `isInfixOf`  s = write h "QUIT" ":Exiting" >> exitWith ExitSuccess
 eval k h s | "PING :" `isPrefixOf` s = write h "PONG" (':' : drop 6 s)
