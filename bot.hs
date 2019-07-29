@@ -13,6 +13,7 @@ server = "irc.freenode.org"
 port   = 6667
 chan   = "#boths-testing"
 nick   = "botik"
+sfile  = "staf"
 
 main = forever $ do
     h <- connectTo server (PortNumber (fromIntegral port))
@@ -49,11 +50,19 @@ eval _ _ _ = return () -- ignore everything else
 privmsg h s = write h "PRIVMSG" (chan ++ " :" ++ s)
 
 bot k h = forkIO $ forever $ do
-    threadDelay 10000000
+    threadDelay 1000000
+    f <- openFile sfile ReadMode
+    status <- hGetLine f
+    hClose f
     m <- tryReadMVar k
     case m of
        Nothing -> return ()
-       Just a -> privmsg h a
-    -- checkg gpio, set rgb diods, read last topit, update topic 
-    -- TOPIC <channel> [<topic>]
+       Just a -> do
+           if status == "open" && not ("base open " `isPrefixOf` a)
+           then settopic h ("base open \\o/ " ++ (dropWhile (/= '|') a))
+           else return ()
+           if status /= "open" && not ("base close " `isPrefixOf` a)
+           then settopic h ("base close :( " ++ (dropWhile (/= '|') a))
+           else return ()
 
+settopic h s = hPrintf h "%s%s\r\n" ("TOPIC " ++ chan ++ " :") s
