@@ -51,7 +51,7 @@ eval k h s | "TOPIC " `isPrefixOf` (command s) || "332 " `isPrefixOf` (command s
     putStrLn ("kanal> " ++ (content s))
   where
     command = drop 1 . dropWhile (/= ' ')
-    content = drop 1 . dropWhile (/= ':') . drop 1
+    content = drop 1 . dropWhile (/= ':') . dropWhile (/= ' ')
 eval _ _ _ = return () -- ignore everything else
 
 checksw k h = forkIO $ forever $ do
