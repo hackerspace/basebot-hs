@@ -56,12 +56,8 @@ eval _ _ _ = return () -- ignore everything else
 
 checksw k h = forkIO $ forever $ do
     threadDelay (seconds 1)
-    fo <- openFile ofile ReadMode
-    fc <- openFile cfile ReadMode
-    so <- hGetLine fo
-    sc <- hGetLine fc
-    hClose fo
-    hClose fc
+    so <- readFile ofile
+    sc <- readFile cfile
     m <- tryReadMVar k
     case m of
         Nothing -> return ()
