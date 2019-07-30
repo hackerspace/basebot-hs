@@ -65,8 +65,8 @@ bot k h = forkIO $ forever $ do
            if so == "1" && sc == "0" && not ("base open " `isPrefixOf` a)
            then settopic h ("base open \\o/ " ++ (dropWhile (/= '|') a))
            else return ()
-           if so == "0" && sc == "1" && not ("base close " `isPrefixOf` a)
-           then settopic h ("base close :( " ++ (dropWhile (/= '|') a))
+           if so == "0" && sc == "1" && not ("base closed " `isPrefixOf` a)
+           then settopic h ("base closed :( " ++ (dropWhile (/= '|') a))
            else return ()
 
 settopic h s = hPrintf h "%s%s\r\n" ("TOPIC " ++ chan ++ " :") s
