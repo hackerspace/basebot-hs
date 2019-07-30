@@ -1,12 +1,10 @@
 import Network
 import System.IO
+import System.Timeout
 import Text.Printf
 import Data.List
 import System.Exit
 import Control.Concurrent
-import Control.Concurrent.STM
-import Control.Concurrent.STM.TChan
-import System.Random
 import Control.Monad
 import Control.Exception
 
@@ -29,7 +27,7 @@ main = forever $ catch mloop err
         checksw k h
         listen k h
     err :: SomeException -> IO ()
-    err ex = putStrLn ( "Error: " ++ show ex ) >> threadDelay (60 * 1000000) -- 60 s
+    err ex = putStrLn ( "Error: " ++ show ex ) >> threadDelay (seconds 60)
 
 write :: Handle -> String -> String -> IO ()
 write h s t = do
@@ -37,8 +35,11 @@ write h s t = do
     printf    "> %s %s\n" s t
 
 listen k h = forever $ do
-    t <- hGetLine h
-    let s = init t
+    m <- timeout (minutes 5) (hGetLine h)
+    s <- case m of
+        Nothing -> (hClose h >> error "Timeout")
+        Just a -> return (init a)
+--    s <- maybe (hClose h >> error "Timeout") (return . init) m
     putStrLn s
     eval k h s
 
@@ -54,7 +55,7 @@ eval k h s | "TOPIC " `isPrefixOf` (command s) || "332 " `isPrefixOf` (command s
 eval _ _ _ = return () -- ignore everything else
 
 checksw k h = forkIO $ forever $ do
-    threadDelay (1 * 1000000) -- 1 s
+    threadDelay (seconds 1)
     fo <- openFile ofile ReadMode
     fc <- openFile cfile ReadMode
     so <- hGetLine fo
@@ -74,3 +75,5 @@ checksw k h = forkIO $ forever $ do
 
 settopic h s = hPrintf h "%s%s\r\n" ("TOPIC " ++ chan ++ " :") s
 --privmsg h s = write h "PRIVMSG" (chan ++ " :" ++ s)
+minutes m = m * seconds 1 * 60
+seconds s = s * 1000000
