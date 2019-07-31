@@ -12,8 +12,11 @@ server = "irc.freenode.org"
 port   = 6667
 chan   = "#base48"
 nick   = "basebot-hs"
-ofile  = "/sys/class/gpio/gpio1_pd0/value"
-cfile  = "/sys/class/gpio/gpio2_pd2/value"
+ofile  = "/sys/class/gpio/gpio2_pd2/value"
+cfile  = "/sys/class/gpio/gpio1_pd0/value"
+olfile = "/sys/class/gpio/gpio4_pd5/value"
+clfile = "/sys/class/gpio/gpio5_pd6/value"
+slfile = "/sys/class/gpio/gpio3_pd1/value"
 
 main = forever $ catch mloop err
   where
@@ -39,11 +42,11 @@ listen k h = forever $ do
     s <- case m of
         Nothing -> (hClose h >> error "Timeout")
         Just a -> return (init a)
---    s <- maybe (hClose h >> error "Timeout") (return . init) m
     putStrLn s
     eval k h s
 
---eval k h s | "!quit"  `isInfixOf`  s = write h "QUIT" ":Exiting" >> exitWith ExitSuccess
+eval k h s | ".beacon on"  `isInfixOf` s = writeFile slfile "1"
+eval k h s | ".beacon off" `isInfixOf` s = writeFile slfile "0"
 eval k h s | "PING :" `isPrefixOf` s = write h "PONG" (':' : drop 6 s)
 eval k h s | "TOPIC " `isPrefixOf` (command s) || "332 " `isPrefixOf` (command s) = do
     tryPutMVar k (content s)
@@ -56,8 +59,13 @@ eval _ _ _ = return () -- ignore everything else
 
 checksw k h = forkIO $ forever $ do
     threadDelay (seconds 1)
-    so <- readFile ofile
-    sc <- readFile cfile
+    fo <- openFile ofile ReadMode
+    fc <- openFile cfile ReadMode
+    so <- hGetLine fo
+    sc <- hGetLine fc
+    hClose fo
+    hClose fc
+    sendled so sc
     m <- tryReadMVar k
     case m of
         Nothing -> return ()
@@ -70,6 +78,8 @@ checksw k h = forkIO $ forever $ do
             else return ()
 
 settopic h s = hPrintf h "%s%s\r\n" ("TOPIC " ++ chan ++ " :") s
---privmsg h s = write h "PRIVMSG" (chan ++ " :" ++ s)
+sendled so sc = do
+    writeFile olfile so
+    writeFile clfile sc
 minutes m = m * seconds 1 * 60
 seconds s = s * 1000000
