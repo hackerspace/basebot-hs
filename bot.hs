@@ -2,7 +2,8 @@ import Network
 import System.IO
 import System.Timeout
 import Text.Printf
-import Data.List
+import Data.List hiding (isSuffixOf)
+import Data.Text (isSuffixOf, pack, stripEnd)
 import System.Exit
 import Control.Concurrent
 import Control.Monad
@@ -30,7 +31,7 @@ main = forever $ catch mloop err
         checksw k h
         listen k h
     err :: SomeException -> IO ()
-    err ex = putStrLn ( "Error: " ++ show ex ) >> threadDelay (seconds 60)
+    err ex = putStrLn ( "Error: " ++ show ex ) >> threadDelay (minutes 1)
 
 write :: Handle -> String -> String -> IO ()
 write h s t = do
@@ -45,8 +46,8 @@ listen k h = forever $ do
     putStrLn s
     eval k h s
 
-eval k h s | ".beacon on"  `isInfixOf` s = writeFile slfile "1"
-eval k h s | ".beacon off" `isInfixOf` s = writeFile slfile "0"
+eval k h s | (pack ".beacon on")  `isSuffixOf` (stripEnd (pack s)) = writeFile slfile "1"
+eval k h s | (pack ".beacon off") `isSuffixOf` (stripEnd (pack s)) = writeFile slfile "0"
 eval k h s | "PING :" `isPrefixOf` s = write h "PONG" (':' : drop 6 s)
 eval k h s | "TOPIC " `isPrefixOf` (command s) || "332 " `isPrefixOf` (command s) = do
     tryPutMVar k (content s)
@@ -71,13 +72,21 @@ checksw k h = forkIO $ forever $ do
         Nothing -> return ()
         Just a -> do
             if so == "1" && sc == "0" && not ("base open " `isPrefixOf` a)
-            then settopic h ("base open \\o/ " ++ (dropWhile (/= '|') a))
+            then do 
+                settopic h ("base open \\o/ " ++ (dropWhile (/= '|') a))
+                threadDelay (seconds 5)
             else return ()
             if so == "0" && sc == "1" && not ("base closed " `isPrefixOf` a)
-            then settopic h ("base closed :( " ++ (dropWhile (/= '|') a))
+            then do
+                settopic h ("base closed :( " ++ (dropWhile (/= '|') a))
+                threadDelay (seconds 5)
             else return ()
 
-settopic h s = hPrintf h "%s%s\r\n" ("TOPIC " ++ chan ++ " :") s
+settopic h s = catch (hPrintf h "%s%s\r\n" ("TOPIC " ++ chan ++ " :") s) err
+  where
+    err :: SomeException -> IO () 
+    err ex = hClose h >> putStrLn ( "Error in checksw thread: " ++ show ex )
+        
 sendled so sc = do
     writeFile olfile so
     writeFile clfile sc
