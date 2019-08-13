@@ -1,3 +1,4 @@
+{-# LANGUAGE ScopedTypeVariables #-}
 import Network
 import System.IO
 import System.Timeout
@@ -27,8 +28,8 @@ main = forever $ catch mloop err
         write h "NICK" nick
         write h "USER" (nick++" 0 * :open switch bot")
         write h "JOIN" chan
-        k <- newEmptyMVar
-        checksw k h
+        (k :: MVar ([Char], Handle)) <- newEmptyMVar
+        checksw k 
         listen k h
     err :: SomeException -> IO ()
     err ex = putStrLn ( "Error: " ++ show ex ) >> threadDelay (minutes 1)
@@ -50,15 +51,15 @@ eval k h s | (pack ".beacon on")  `isSuffixOf` (stripEnd (pack s)) = writeFile s
 eval k h s | (pack ".beacon off") `isSuffixOf` (stripEnd (pack s)) = writeFile slfile "0"
 eval k h s | "PING :" `isPrefixOf` s = write h "PONG" (':' : drop 6 s)
 eval k h s | "TOPIC " `isPrefixOf` (command s) || "332 " `isPrefixOf` (command s) = do
-    tryPutMVar k (content s)
-    swapMVar k (content s)
+    tryPutMVar k (content s, h)
+    swapMVar k (content s, h)
     putStrLn ("kanal> " ++ (content s))
   where
     command = drop 1 . dropWhile (/= ' ')
     content = drop 1 . dropWhile (/= ':') . dropWhile (/= ' ')
 eval _ _ _ = return () -- ignore everything else
 
-checksw k h = forkIO $ forever $ do
+checksw k = forkIO $ forever $ do
     threadDelay (seconds 1)
     fo <- openFile ofile ReadMode
     fc <- openFile cfile ReadMode
@@ -71,21 +72,21 @@ checksw k h = forkIO $ forever $ do
     case m of
         Nothing -> return ()
         Just a -> do
-            if so == "1" && sc == "0" && not ("base open " `isPrefixOf` a)
+            if so == "1" && sc == "0" && not ("base open " `isPrefixOf` (fst a))
             then do 
-                settopic h ("base open \\o/ " ++ (dropWhile (/= '|') a))
+                settopic (snd a) ("base open \\o/ " ++ (dropWhile (/= '|') (fst a)))
                 threadDelay (seconds 5)
             else return ()
-            if so == "0" && sc == "1" && not ("base closed " `isPrefixOf` a)
+            if so == "0" && sc == "1" && not ("base closed " `isPrefixOf` (fst a))
             then do
-                settopic h ("base closed :( " ++ (dropWhile (/= '|') a))
+                settopic (snd a) ("base closed :( " ++ (dropWhile (/= '|') (fst a)))
                 threadDelay (seconds 5)
             else return ()
 
 settopic h s = catch (hPrintf h "%s%s\r\n" ("TOPIC " ++ chan ++ " :") s) err
   where
     err :: SomeException -> IO () 
-    err ex = hClose h >> putStrLn ( "Error in checksw thread: " ++ show ex )
+    err ex = putStrLn ( "Error in checksw thread: " ++ show ex )
         
 sendled so sc = do
     writeFile olfile so
